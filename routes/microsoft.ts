@@ -17,7 +17,7 @@ const router = express.Router();
 
 router.post('/authenticate', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
-    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then(data => {
+    authenticate('', '!', {}).then(data => {
         console.log('AUTHENTICATE: ', data);
         res.send(data);
     }).catch(err =>{
