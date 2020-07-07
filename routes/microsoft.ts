@@ -8,6 +8,8 @@ import {
     ExchangeRpsTicketResponse,
     LogUserResponse, PreAuthResponse, TokensExchangeOptions, TokensExchangeProperties
 } from "../models/microsoft.models";
+import {GetUGCQueryString, XBLAuthorization} from "../models/xboxlive.models";
+import {getPlayerGameClips} from "./xboxlive";
 
 const router = express.Router();
 
@@ -23,6 +25,27 @@ router.post('/authenticate', async (req, res, next) => {
         res.send(err);
     })
 });
+
+router.get('/clips', async (req, res, next) => {
+    console.log('Server Requests: ', req.body);
+    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then((data: any) => {
+        if (data) {
+            const gamertagOrXUID = req.body.gamertagOrXUID;
+            const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
+            const query: GetUGCQueryString = {};
+            getPlayerGameClips(gamertagOrXUID, auth, query).then((data: any) => {
+                res.send(data);
+            }).catch((err: any) => {
+                res.send(err);
+            })
+        } else {
+            res.send(new Error('No authentication data'));
+        }
+    }).catch((err: any) => {
+        res.send(err);
+    });
+});
+
 module.exports = router;
 
 // ----- CONSTANTS ----- //

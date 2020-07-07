@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import logger from "morgan";
 import mongoose from 'mongoose';
 import cors from 'cors';
+import bodyParser from 'body-parser';
 
 mongoose.Promise = global.Promise;
 const { PORT, CLIENT_ORIGIN } = require('./config');
@@ -18,9 +19,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.json());
 
-app.use('/xboxlive', xboxliveRouter);
-app.use('/microsoft', microsoftRouter);
+// app.use('/xboxlive', xboxliveRouter);
+app.use('/xboxlive', microsoftRouter);
 
 app.use(
     cors({
