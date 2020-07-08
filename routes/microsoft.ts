@@ -1,4 +1,5 @@
 import {stringify, parse} from "querystring";
+import * as admin from 'firebase-admin';
 import axios from 'axios';
 import express  from 'express';
 import {
@@ -9,26 +10,43 @@ import {
     LogUserResponse, PreAuthResponse, TokensExchangeOptions, TokensExchangeProperties
 } from "../models/microsoft.models";
 import {GetUGCQueryString, XBLAuthorization} from "../models/xboxlive.models";
-import {getPlayerGameClips} from "./xboxlive";
+import {getPlayerGameClips, getPlayerXUID} from "./xboxlive";
 
 const router = express.Router();
 
-// ----- Microsoft API ----- //
+admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    databaseURL: 'https://<DATABASE_NAME>.firebaseio.com'
+});
 
-router.post('/authenticate', async (req, res, next) => {
-    console.log('Server Requests: ', req.body);
-    authenticate('', '!', {}).then(data => {
-        console.log('AUTHENTICATE: ', data);
-        res.send(data);
+// ----- Microsoft API ----- //
+// {
+//     uid: '',
+//     gamertag: '',
+//     email: '',
+//     password: ''
+// }
+router.post('/link', async (req, res, next) => {
+    authenticate(req.body.email, req.body.password, {}).then(async (data) => {
+        const authorization: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash };
+        const gamerXUID = await getPlayerXUID(req.body.gamertag, authorization);
+        if (gamerXUID === data.userXUID) {
+            // TODO: Add firebse to add gamertag to user account
+            // admin.firestore().collection('users').doc(req.body.uid).update({gamertag: req.body.gamertag});
+            res.send(data);
+        } else {
+            res.send('Gamertag does not match authentication data');
+        }
     }).catch(err =>{
         console.log("ERROR: ", err);
         res.send(err);
     })
 });
 
-router.get('/clips', async (req, res, next) => {
+router.post('/clips', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
-    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then((data: any) => {
+    // TODO: For individual user authentication and check matching XUID
+    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
