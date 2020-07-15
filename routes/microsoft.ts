@@ -1,5 +1,6 @@
 import {stringify, parse} from "querystring";
-import * as admin from 'firebase-admin';
+const admin = require('firebase-admin');
+const serviceAccount = require('../config/account-credentials.json');
 import axios from 'axios';
 import express  from 'express';
 import {
@@ -14,10 +15,12 @@ import {getPlayerGameClips, getPlayerXUID} from "./xboxlive";
 
 const router = express.Router();
 
-admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    databaseURL: 'https://<DATABASE_NAME>.firebaseio.com'
-});
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: 'https://gamesocial-zb.firebaseio.com'
+    });
+}
 
 // ----- Microsoft API ----- //
 // {
@@ -33,34 +36,34 @@ router.post('/link', async (req, res, next) => {
         if (gamerXUID === data.userXUID) {
             // TODO: Add firebse to add gamertag to user account
             // admin.firestore().collection('users').doc(req.body.uid).update({gamertag: req.body.gamertag});
-            res.send(data);
+            res.status(200).send(data);
         } else {
-            res.send('Gamertag does not match authentication data');
+            res.status(401).send(new Error('Gamertag does not match authentication data'));
         }
     }).catch(err =>{
         console.log("ERROR: ", err);
-        res.send(err);
+        res.status(500).send(new Error(err));
     })
 });
 
 router.post('/clips', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
     // TODO: For individual user authentication and check matching XUID
-    authenticate('zackblaylock@gmail.com', '', {}).then((data) => {
+    authenticate('', '', {}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
             const query: GetUGCQueryString = {};
             getPlayerGameClips(gamertagOrXUID, auth, query).then((data: any) => {
-                res.send(data);
+                res.status(200).send(data);
             }).catch((err: any) => {
-                res.send(err);
+                res.status(500).send(new Error(err));
             })
         } else {
-            res.send(new Error('No authentication data'));
+            res.status(401).send(new Error('No authentication data'));
         }
     }).catch((err: any) => {
-        res.send(err);
+        res.status(500).send(new Error(err));
     });
 });
 

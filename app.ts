@@ -5,12 +5,14 @@ import logger from "morgan";
 import mongoose from 'mongoose';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+const admin = require('firebase-admin');
+const serviceAccount = require('./config/account-credentials.json');
 
 mongoose.Promise = global.Promise;
 const { PORT, CLIENT_ORIGIN } = require('./config');
 
-const xboxliveRouter = require('./routes/xboxlive');
 const microsoftRouter = require('./routes/microsoft');
+const firebaseRouter = require('./routes/firebase');
 
 const app = express.application = express();
 
@@ -21,18 +23,14 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 
-// app.use('/xboxlive', xboxliveRouter);
-app.use('/xboxlive', microsoftRouter);
-
 app.use(
-    cors
+    cors({
+        origin: CLIENT_ORIGIN
+    })
 );
 
-app.use(function(req, res, next) {
-   res.header('Access-Control-Allow-Origin', '*');
-   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-   next();
-});
+app.use('/xboxlive', microsoftRouter);
+app.use('/firebase', firebaseRouter);
 
 app.use('*', (req, res) => {
     return res.status(404).json({ message: 'Not Found' });
