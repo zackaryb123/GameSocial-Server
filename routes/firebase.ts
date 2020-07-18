@@ -12,20 +12,19 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const router = express.Router();
 
-router.post('/userClips', async (req, res, next) => {
-    console.log('req.body: ', req.body);
-    const clipRefs = new Array<firestore.DocumentReference<firestore.DocumentData>>();
+router.post('/userClips', (req, res, next) => {
+    (async () => {
+        const clipRefs = new Array<firestore.DocumentReference<firestore.DocumentData>>();
 
-    for (const clip of req.body) {
-        const ref = admin.firestore().collection('clips').doc(clip);
-        clipRefs.push(ref);
-    }
-    db.getAll(...clipRefs).then((snap: any) => {
+        for (const clip of req.body) {
+            const ref = admin.firestore().doc(`clips/${clip}`);
+            clipRefs.push(ref);
+        }
+        const snap = await db.getAll(...clipRefs);
         const data = snap.map((item: any) => item.data());
-        res.send(data);
-    }).catch((err: any) => {
-        res.send(err);
-    });
+        console.log(data);
+        return res.json(data);
+    })();
 });
 
 module.exports = router;

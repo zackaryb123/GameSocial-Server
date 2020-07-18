@@ -11,7 +11,7 @@ import {
     LogUserResponse, PreAuthResponse, TokensExchangeOptions, TokensExchangeProperties
 } from "../models/microsoft.models";
 import {GetUGCQueryString, XBLAuthorization} from "../models/xboxlive.models";
-import {getPlayerGameClips, getPlayerXUID} from "./xboxlive";
+import {getPlayerGameClips, getPlayerGameClip, getPlayerXUID} from "./xboxlive";
 
 const router = express.Router();
 
@@ -34,6 +34,7 @@ router.post('/link', async (req, res, next) => {
         const authorization: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash };
         const gamerXUID = await getPlayerXUID(req.body.gamertag, authorization);
         if (gamerXUID === data.userXUID) {
+            console.log(data);
             // TODO: Add firebse to add gamertag to user account
             // admin.firestore().collection('users').doc(req.body.uid).update({gamertag: req.body.gamertag});
             res.status(200).send(data);
@@ -49,12 +50,34 @@ router.post('/link', async (req, res, next) => {
 router.post('/clips', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
     // TODO: For individual user authentication and check matching XUID
-    authenticate('', '', {}).then((data) => {
+    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
             const query: GetUGCQueryString = {};
             getPlayerGameClips(gamertagOrXUID, auth, query).then((data: any) => {
+                res.status(200).send(data);
+            }).catch((err: any) => {
+                res.status(500).send(new Error(err));
+            })
+        } else {
+            res.status(401).send(new Error('No authentication data'));
+        }
+    }).catch((err: any) => {
+        res.status(500).send(new Error(err));
+    });
+});
+
+router.post('/clip', async (req, res, next) => {
+    console.log('Server Requests: ', req.body);
+    authenticate('', '', {}).then((data) => {
+        if (data) {
+            const gamertagOrXUID = req.body.gamertagOrXUID;
+            const scid = req.body.scid;
+            const gameClipId = req.body.gameClipId;
+            const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
+            const query: GetUGCQueryString = {};
+            getPlayerGameClip(gamertagOrXUID, scid, gameClipId, auth, query).then((data: any) => {
                 res.status(200).send(data);
             }).catch((err: any) => {
                 res.status(500).send(new Error(err));

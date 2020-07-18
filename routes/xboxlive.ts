@@ -155,6 +155,22 @@ export const getPlayerScreenshotsFromActivityHistory = async (
         excludeTypes: 'GameDVR'
     });
 
+export const getPlayerGameClip = (
+    gamertagOrXUID: string | number,
+    scid: string,
+    gameClipId: string,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {}
+    ): Promise<any> =>
+    _getPlayerUGCs<PlayerGameClipsResponse>(
+        gamertagOrXUID,
+        scid,
+        gameClipId,
+        authorization,
+        qs,
+        'gameclips'
+    );
+
 export const getPlayerGameClips = (
     gamertagOrXUID: string | number,
     authorization: XBLAuthorization,
@@ -244,6 +260,40 @@ export const call = <T = any>(
                 throw new Error('Not found');
             else throw new Error(err.message);
         });
+};
+
+const _getPlayerUGCs = async <T>(
+    gamertagOrXUID: string | number,
+    scid: string,
+    gameClipId: string,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {},
+    type: 'screenshots' | 'gameclips'
+    ) => {
+    const target =
+        _isXUID(gamertagOrXUID) === true
+            ? `xuid(${gamertagOrXUID})`
+            : `xuid(${await getPlayerXUID(
+            gamertagOrXUID as string,
+            authorization
+            )})`;
+    return call<T>(
+        {
+            url: `${uris[type]}/${join(
+                'users',
+                target,
+                'scids',
+                scid,
+                type === 'screenshots' ? 'screenshots' : 'clips',
+                gameClipId
+            )}`,
+            params: {
+                maxItems: qs.maxItems || 25,
+                continuationToken: qs.continuationToken
+            }
+        },
+        authorization
+    );
 };
 
 const _getPlayerUGC = async <T>(
