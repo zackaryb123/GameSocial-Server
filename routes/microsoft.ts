@@ -50,7 +50,7 @@ router.post('/link', async (req, res, next) => {
 router.post('/clips', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
     // TODO: For individual user authentication and check matching XUID
-    authenticate('zackblaylock@gmail.com', 'Digger123!', {}).then((data) => {
+    authenticate('', '', {}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
