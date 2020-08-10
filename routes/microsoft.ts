@@ -10,8 +10,20 @@ import {
     ExchangeRpsTicketResponse,
     LogUserResponse, PreAuthResponse, TokensExchangeOptions, TokensExchangeProperties
 } from "../models/microsoft.models";
-import {GetUGCQueryString, XBLAuthorization} from "../models/xboxlive.models";
-import {getPlayerGameClips, getPlayerGameClip, getPlayerXUID} from "./xboxlive";
+import {
+    GetActivityQueryString,
+    GetMediaHubItemsPayload,
+    GetUGCQueryString, Setting,
+    XBLAuthorization
+} from "../models/xboxlive.models";
+import {
+    getPlayerGameClips,
+    getPlayerGameClip,
+    getPlayerXUID,
+    getPlayerGameClipsFromMediaHub,
+    getPlayerGameClipsFromActivityHistory,
+    getPlayerSettings
+} from "./xboxlive";
 
 const router = express.Router();
 
@@ -22,39 +34,64 @@ if (!admin.apps.length) {
     });
 }
 
+const GAMESOCIAL_EMAIL = ''
+const GAMESOCIAL_PASSWORD = ''
+
 // ----- Microsoft API ----- //
-// {
-//     uid: '',
-//     gamertag: '',
-//     email: '',
-//     password: ''
-// }
+
+router.post('/sync', async (req, res, next) => {
+    console.log('req.body : ', req.body);
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD, {}).then(async (data) => {
+        const authorization: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash };
+        const gamerXUID = req.body.gamertag;
+        return syncAccountSettings(req.body.uid, gamerXUID, authorization)
+            .then(data => {
+                res.status(200).send(data);
+            })
+            .catch(err => {
+                res.status(500).send({message: err.message});
+            });
+    });
+})
+
+// { uid: '', gamertag: '', email: '', password: '' }
 router.post('/link', async (req, res, next) => {
+    console.log('req.body : ', req.body);
     authenticate(req.body.email, req.body.password, {}).then(async (data) => {
         const authorization: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash };
         const gamerXUID = await getPlayerXUID(req.body.gamertag, authorization);
         if (gamerXUID === data.userXUID) {
             console.log(data);
-            // TODO: Add firebse to add gamertag to user account
-            // admin.firestore().collection('users').doc(req.body.uid).update({gamertag: req.body.gamertag});
-            res.status(200).send(data);
+            admin.firestore().doc(`users/${req.body.uid}`).update(
+                {
+                    gamertag: req.body.gamertag,
+                    "linkedAccounts.xbox.gamertag": req.body.gamertag,
+                    "linkedAccounts.xbox.xuid": data.userXUID
+                }).then(async () => {
+                await syncAccountSettings(req.body.uid, gamerXUID, authorization)
+                res.status(200).send(data);
+            }).catch((err: any) => {
+                res.status(500).send({message: err.message});
+            })
         } else {
-            res.status(401).send(new Error('Gamertag does not match authentication data'));
+            res.status(401).send({message: 'Gamertag does not match authentication data'});
         }
     }).catch(err =>{
-        console.log("ERROR: ", err);
-        res.status(500).send(new Error(err));
+        console.log("ERR    OR: ", err);
+        res.status(500).send({message: err.message});
     })
 });
 
+// { gamertagOrXUID: '', continuationToken: '' }
 router.post('/clips', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
-    // TODO: For individual user authentication and check matching XUID
-    authenticate('', '', {}).then((data) => {
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD, {}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
-            const query: GetUGCQueryString = {};
+            const query: GetUGCQueryString = {
+                continuationToken: req.body?.continuationToken || null
+            };
             getPlayerGameClips(gamertagOrXUID, auth, query).then((data: any) => {
                 res.status(200).send(data);
             }).catch((err: any) => {
@@ -68,15 +105,17 @@ router.post('/clips', async (req, res, next) => {
     });
 });
 
+// { gamertagOrXUID: '', scid: '', gameClipId: '' }
 router.post('/clip', async (req, res, next) => {
     console.log('Server Requests: ', req.body);
-    authenticate('', '', {}).then((data) => {
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD,{}).then((data) => {
         if (data) {
             const gamertagOrXUID = req.body.gamertagOrXUID;
             const scid = req.body.scid;
             const gameClipId = req.body.gameClipId;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
             const query: GetUGCQueryString = {};
+
             getPlayerGameClip(gamertagOrXUID, scid, gameClipId, auth, query).then((data: any) => {
                 res.status(200).send(data);
             }).catch((err: any) => {
@@ -86,7 +125,7 @@ router.post('/clip', async (req, res, next) => {
             res.status(401).send(new Error('No authentication data'));
         }
     }).catch((err: any) => {
-        res.status(500).send(new Error(err));
+        res.status(500).send({error: err.message});
     });
 });
 
@@ -124,6 +163,54 @@ type PreAuthMatchesParameters = {
 type HashParameters = LogUserResponse;
 
 // ----- Methods ----- //
+
+export const syncAccountSettings = async(userId: string, gamerXUID: string, authorization: XBLAuthorization) => {
+    getPlayerSettings(gamerXUID, authorization, [
+        'GameDisplayPicRaw',
+        'Gamerscore',
+        'Gamertag',
+        'AccountTier',
+        'XboxOneRep',
+        'PreferredColor',
+        'RealName',
+        'Bio',
+        'Location',
+        'ModernGamertag',
+        'ModernGamertagSuffix',
+        'UniqueModernGamertag',
+        'RealNameOverride',
+        'TenureLevel',
+        'Watermarks',
+        'IsQuarantined',
+        'DisplayedLinkedAccounts'
+    ]).then(async (data: any) => {
+        const settings = {
+            GameDisplayPicRaw: data[0].value,
+            Gamerscore: data[1].value,
+            Gamertag: data[2].value,
+            AccountTier: data[3].value,
+            XboxOneRep: data[4].value,
+            PreferredColor: data[5].value,
+            RealName: data[6].value,
+            Bio: data[7].value,
+            Location: data[8].value,
+            ModernGamertag: data[9].value,
+            ModernGamertagSuffix: data[10].value,
+            UniqueModernGamertag: data[11].value,
+            RealNameOverride: data[12].value,
+            TenureLevel: data[13].value,
+            Watermarks: data[14].value,
+            IsQuarantined: data[15].value,
+            DisplayedLinkedAccounts: data[16].value,
+        }
+        await admin.firestore().doc(`users/${userId}`).update({
+            avatar: settings.GameDisplayPicRaw,
+            gamertag: settings.Gamertag,
+            "linkedAccounts.xbox.settings": settings
+        });
+    })
+}
+
 
 export const authenticate = async (
     email: Credentials['email'],
@@ -256,7 +343,6 @@ export const preAuth = (): Promise<PreAuthResponse> =>
             }
 
             const body = (response.data || '') as string;
-            console.log("BODY: ", body);
             const cookie = (response.headers['set-cookie'] || [])
                 .map((c: string) => c.split(';')[0])
                 .join('; ');
