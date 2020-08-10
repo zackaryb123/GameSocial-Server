@@ -17,6 +17,7 @@ import {
     XBLAuthorization
 } from "../models/xboxlive.models";
 import { join } from 'path';
+import admin from "firebase-admin";
 
 const router = express.Router();
 
@@ -315,7 +316,7 @@ const _getPlayerUGC = async <T>(
             url: `${uris[type]}/${join(
                 'users',
                 target,
-                type === 'screenshots' ? 'screenshots' : 'clips'
+                type === 'screenshots' ? 'screenshots' : 'clips',
             )}`,
             params: {
                 maxItems: qs.maxItems || 25,
