@@ -22,7 +22,7 @@ import {
     getPlayerXUID,
     getPlayerGameClipsFromMediaHub,
     getPlayerGameClipsFromActivityHistory,
-    getPlayerSettings
+    getPlayerSettings, getPlayerList, getPlayerInventory
 } from "./xboxlive";
 
 const router = express.Router();
@@ -34,19 +34,18 @@ if (!admin.apps.length) {
     });
 }
 
-const GAMESOCIAL_EMAIL = ''
-const GAMESOCIAL_PASSWORD = ''
+
 
 // ----- Microsoft API ----- //
 
 router.post('/sync', async (req, res, next) => {
     console.log('req.body : ', req.body);
-    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD, {}).then(async (data) => {
-        const authorization: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash };
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD, {}).then(async (auth) => {
+        const authorization: XBLAuthorization = { XSTSToken: auth.XSTSToken, userHash: auth.userHash };
         const gamerXUID = req.body.gamertag;
-        return syncAccountSettings(req.body.uid, gamerXUID, authorization)
-            .then(data => {
-                res.status(200).send(data);
+        await syncAccountSettings(req.body.uid, gamerXUID, authorization)
+            .then(() => {
+                res.status(200).send({timestamp: Date.now()});
             })
             .catch(err => {
                 res.status(500).send({message: err.message});
@@ -68,8 +67,8 @@ router.post('/link', async (req, res, next) => {
                     "linkedAccounts.xbox.gamertag": req.body.gamertag,
                     "linkedAccounts.xbox.xuid": data.userXUID
                 }).then(async () => {
-                await syncAccountSettings(req.body.uid, gamerXUID, authorization)
-                res.status(200).send(data);
+                const syncData = await syncAccountSettings(req.body.uid, gamerXUID, authorization);
+                res.status(200).send(syncData);
             }).catch((err: any) => {
                 res.status(500).send({message: err.message});
             })
@@ -115,7 +114,6 @@ router.post('/clip', async (req, res, next) => {
             const gameClipId = req.body.gameClipId;
             const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
             const query: GetUGCQueryString = {};
-
             getPlayerGameClip(gamertagOrXUID, scid, gameClipId, auth, query).then((data: any) => {
                 res.status(200).send(data);
             }).catch((err: any) => {
@@ -126,6 +124,52 @@ router.post('/clip', async (req, res, next) => {
         }
     }).catch((err: any) => {
         res.status(500).send({error: err.message});
+    });
+});
+
+router.post('/inventory', async (req, res, next) => {
+    console.log('Server Request: ', req.body);
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD,{}).then(async (data) => {
+        if (data) {
+            const gamertagOrXUID = 'pr0Xt0Xtype18'; //  req.body.gamertagOrXUID;
+            const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
+            const query: GetUGCQueryString = {};
+
+            getPlayerInventory(gamertagOrXUID, auth, query).then(data => {
+                res.status(200).send(data);
+                console.log('GAMES SUCCESS: ', data);
+            }).catch(err => {
+                console.log('GAMES ERROR: ', err);
+                res.status(500).send({message: err.message})
+            });
+
+
+        }
+    });
+});
+
+
+// { gamertagOrXUID: '', listType: '', listName: '' }
+router.post('/games', async (req, res, next) => {
+    console.log('Server Request: ', req.body);
+    authenticate(GAMESOCIAL_EMAIL, GAMESOCIAL_PASSWORD,{}).then(async (data) => {
+       if (data) {
+           const gamertagOrXUID = 'pr0Xt0Xtype18'; //  req.body.gamertagOrXUID;
+           const listType = 'pins'; // req.body.listType;
+           const listName = 'xblpins'; // req.body.listName;
+           const auth: XBLAuthorization = { XSTSToken: data.XSTSToken, userHash: data.userHash};
+           const query: GetUGCQueryString = {};
+
+           getPlayerList(gamertagOrXUID, listType, listName, auth, query).then(data => {
+               res.status(200).send(data);
+               console.log('GAMES SUCCESS: ', data);
+           }).catch(err => {
+               console.log('GAMES ERROR: ', err);
+               res.status(500).send({message: err.message})
+           });
+
+
+       }
     });
 });
 
@@ -165,7 +209,7 @@ type HashParameters = LogUserResponse;
 // ----- Methods ----- //
 
 export const syncAccountSettings = async(userId: string, gamerXUID: string, authorization: XBLAuthorization) => {
-    getPlayerSettings(gamerXUID, authorization, [
+    return getPlayerSettings(gamerXUID, authorization, [
         'GameDisplayPicRaw',
         'Gamerscore',
         'Gamertag',
@@ -203,11 +247,12 @@ export const syncAccountSettings = async(userId: string, gamerXUID: string, auth
             IsQuarantined: data[15].value,
             DisplayedLinkedAccounts: data[16].value,
         }
-        await admin.firestore().doc(`users/${userId}`).update({
+       return await admin.firestore().doc(`users/${userId}`).update({
             avatar: settings.GameDisplayPicRaw,
             gamertag: settings.Gamertag,
-            "linkedAccounts.xbox.settings": settings
-        });
+            "linkedAccounts.xbox.settings": settings,
+            "linkedAccounts.xbox.timestamp": Date.now()
+        })
     })
 }
 

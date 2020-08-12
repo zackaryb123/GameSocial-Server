@@ -27,10 +27,13 @@ const uris = {
     gameclips: 'https://gameclipsmetadata.xboxlive.com',
     profile: 'https://profile.xboxlive.com',
     avty: 'https://avty.xboxlive.com',
-    mediahub: 'https://mediahub.xboxlive.com'
+    mediahub: 'https://mediahub.xboxlive.com',
+    list: `https://eplists.xboxlive.com`,
+    inventory: 'https://inventory.xboxlive.com'
 };
 const request = {
     baseHeaders: {
+        'Content-Type': 'application/json',
         Accept: 'application/json',
         'Accept-encoding': 'gzip',
         'Accept-Language': 'en-US',
@@ -90,6 +93,32 @@ export const getPlayerSettings = async (
         throw new Error("Could not resolve player's settings.");
     } else return response.profileUsers[0].settings || [];
 };
+
+export const getPlayerInventory = async  (
+    gamertagOrXUID: string | number,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {}
+): Promise<any> =>
+    _getPlayerInventory(
+        gamertagOrXUID,
+        authorization,
+        qs
+    );
+
+export const getPlayerList = async  (
+    gamertagOrXUID: string | number,
+    listType: string,
+    listName: string,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {}
+): Promise<any> =>
+    _getPlayerList<PlayerGameClipsResponse>(
+        gamertagOrXUID,
+        listType,
+        listName,
+        authorization,
+        qs
+    );
 
 export const getPlayerActivityHistory = async (
     gamertagOrXUID: string | number,
@@ -263,6 +292,50 @@ export const call = <T = any>(
         });
 };
 
+const _getPlayerInventory = async  <T>(
+    gamertagOrXUID: string | number,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {}
+) => {
+    const target = _isXUID(gamertagOrXUID) === true
+        ? `xuid(${gamertagOrXUID})`
+        : `xuid(${await getPlayerXUID(
+            gamertagOrXUID as string,
+            authorization
+        )})`;
+    return call<T>(
+        {
+            url: `${uris.inventory}/users/${target}/inventory`,
+            params: { }
+        },
+        authorization
+    )
+}
+
+const _getPlayerList = async <T>(
+    gamertagOrXUID: string | number,
+    listType: string,
+    listName: string,
+    authorization: XBLAuthorization,
+    qs: GetUGCQueryString = {}
+) => {
+    const target = _isXUID(gamertagOrXUID) === true
+        ? `xuid(${gamertagOrXUID})`
+        : `xuid(${await getPlayerXUID(
+        gamertagOrXUID as string,
+        authorization
+        )})`;
+    return call<T>(
+        {
+            url: `${uris.list}/${join( 'users', target, 'lists', listType, listName )}`,
+            params: {
+                maxItems: qs.maxItems || 25,
+            }
+        },
+        authorization
+    )
+}
+
 const _getPlayerUGCs = async <T>(
     gamertagOrXUID: string | number,
     scid: string,
@@ -280,11 +353,7 @@ const _getPlayerUGCs = async <T>(
             )})`;
     return call<T>(
         {
-            url: `${uris[type]}/${join(
-                'users',
-                target,
-                'scids',
-                scid,
+            url: `${uris[type]}/${join('users', target, 'scids', scid, 
                 type === 'screenshots' ? 'screenshots' : 'clips',
                 gameClipId
             )}`,
@@ -313,9 +382,7 @@ const _getPlayerUGC = async <T>(
 
     return call<T>(
         {
-            url: `${uris[type]}/${join(
-                'users',
-                target,
+            url: `${uris[type]}/${join('users', target,
                 type === 'screenshots' ? 'screenshots' : 'clips',
             )}`,
             params: {
